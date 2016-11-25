@@ -1,4 +1,26 @@
 'use strict';
+/*
+Based on:
+https://github.com/ldn0x7dc/react-native-view-transformer.git
+
+Some cherry picking from:
+https://github.com/maraujop/react-native-view-transformer.git
+
+New features:
+- overlay an image with high resolution graphics
+- overlay screen with arbitrary stuff
+- Convert between screen coords <-> image coords
+
+At the moment react-native-svg won't keep the resolution on rasterized vectors
+when painted upon a scaled down view, The only solution I found was to paint the
+svg on a large view and transform this view down separately to match the image view.
+
+The overlayed svg view has its own transform parameters which are recalculated
+to match the original view.
+
+N.B this module is subject to refactoring and development. Do not trust on it's
+stability.
+*/
 
 import React from 'react';
 import ReactNative, {
@@ -13,7 +35,6 @@ import Scroller from 'react-native-scroller';
 import {Rect, Transform, transformedRect, availableTranslateSpace, fitCenterRect, alignedRect, getTransform} from './TransformUtils';
 
 export default class ViewTransformer extends React.Component {
-
   static Rect = Rect;
   static getTransform = getTransform;
 
@@ -28,13 +49,22 @@ export default class ViewTransformer extends React.Component {
       //animation state
       animator: new Animated.Value(0),
 
+      svgScale: 1,
+      svgTranslateX: 0,
+      svgTranslateY: 0,
+
       //layout
       width: 0,
       height: 0,
       pageX: 0,
       pageY: 0,
     };
+
     this._viewPortRect = new Rect(); //A holder to avoid new too much
+
+    this._svgRect = (this.props.svgWidth && this.props.svgHeight)
+      ? new Rect()
+      : null  //null means "no valid svg props"
 
     this.cancelAnimation = this.cancelAnimation.bind(this);
     this.contentRect = this.contentRect.bind(this);
@@ -59,6 +89,13 @@ export default class ViewTransformer extends React.Component {
     return this._viewPortRect;
   }
 
+  svgRect() {
+    if(!this._svgRect) return null;
+
+    this._svgRect.set(0, 0, this.props.svgWidth, this.props.svgHeight);
+    return this._svgRect;
+  }
+
   contentRect() {
     let rect = this.viewPortRect().copy();
     if (this.props.contentAspectRatio && this.props.contentAspectRatio > 0) {
@@ -75,8 +112,34 @@ export default class ViewTransformer extends React.Component {
     return rect;
   }
 
+  //clipRect is the painted area relative to the image, i.e.
+  //left >= 0, right <= 1
+  //top => 0, bottom <= 1
+  clipRect = () => {
+    let content = this.contentRect();
+    let transform = this.currentTransform();
+    let transformed = this.transformedContentRect();
+    let viewPort = this.viewPortRect();
+
+    let centerX = 0.5 - transform.translateX / content.width();
+    let centerY = 0.5 - transform.translateY / content.height();
+    let width = Math.min(viewPort.width() / transformed.width(), 1);
+    let height = Math.min(viewPort.height() / transformed.height(), 1);
+
+    return new Rect(
+      Math.max(0, centerX - width/2),   //left
+      Math.max(0, centerY - height/2),  //top
+      Math.min(1, centerX + width/2),   //right
+      Math.min(1, centerY + height/2)   //bottom
+    );
+  }
+
   currentTransform() {
     return new Transform(this.state.scale, this.state.translateX, this.state.translateY);
+  }
+
+  currentSvgTransform() {
+    return new Transform(this.state.svgScale, this.state.svgTranslateX, this.state.svgTranslateY);
   }
 
   componentWillMount() {
@@ -88,10 +151,7 @@ export default class ViewTransformer extends React.Component {
       onResponderGrant: this.onResponderGrant.bind(this),
       onResponderRelease: this.onResponderRelease.bind(this),
       onResponderTerminate: this.onResponderRelease.bind(this),
-      onResponderTerminationRequest: (evt, gestureState) => false, //Do not allow parent view to intercept gesture
-      onResponderSingleTapConfirmed: (evt, gestureState) => {
-        this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed();
-      }
+      onResponderTerminationRequest: (evt, gestureState) => false //Do not allow parent view to intercept gesture
     });
   }
 
@@ -129,15 +189,95 @@ export default class ViewTransformer extends React.Component {
                 ]
           }}>
           {this.props.children}
+          {this.renderFeatures()}
         </View>
+        {this.renderOverlay()}
       </View>
     );
+  }
+
+  renderFeatures = () => {
+    if(!this._svgRect || !this.props.renderFeatures) return null;
+
+    return (
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: this.props.svgWidth,
+          height: this.props.svgHeight,
+          transform: [
+            {scale: this.state.svgScale},
+            {translateX: this.state.svgTranslateX},
+            {translateY: this.state.svgTranslateY}
+          ]
+        }}>
+        {this.props.renderFeatures && this.props.renderFeatures({
+          clipRect: this.clipRect(),
+          viewPortRect: this.viewPortRect(),
+          pointToScreen: this.pointToScreen,
+          screenToPoint: this.screenToPoint,
+          coordToSvgPoint: this.coordToSvgPoint
+        })}
+      </View>
+    );
+  }
+
+  renderOverlay = () => {
+    if(!this.props.renderOverlay) return null;
+
+    return (
+      <View style={{position: 'absolute', left: 0, top: 0, width: this.state.width, height: this.state.height}}>
+        {this.props.renderOverlay && this.props.renderOverlay({
+          clipRect: this.clipRect(),
+          viewPortRect: this.viewPortRect(),
+          pointToScreen: this.pointToScreen,
+          screenToPoint: this.screenToPoint
+        })}
+      </View>
+    );
+  }
+
+  //Convert a relative coordinate (ex: {x: 0.55, y: 0.85})
+  //to a point on the svg overlay
+  coordToSvgPoint = (coord) => {
+    if(!this._svgRect) return coord
+
+    return {
+      x: coord.x * this.props.svgWidth,
+      y: coord.y * this.props.svgHeight
+    }
+  }
+
+  //Convert a point on underlaying image/view to local screen coordinates
+  //Use this for placing stationary controls on screen in renderOverlay()
+  pointToScreen = (drawingPoint) => {
+    let tr = this.transformedContentRect();
+    let co = this.contentRect();
+    return {
+      x: drawingPoint.x * tr.width() + tr.left,
+      y: drawingPoint.y * tr.height() + tr.top
+    }
+  }
+
+  //Convert a point on the visible screen (i.e. from touch event)
+  //to a point on the underlaying image
+  screenToPoint = (screenPoint) => {
+    let tr = this.transformedContentRect();
+    let co = this.contentRect();
+    return {
+      x: screenPoint.x / ( co.width() * this.state.scale + tr.left ),
+      y: screenPoint.y / ( co.height() * this.state.scale + tr.top )
+    }
   }
 
   onLayout(e) {
     const {width, height} = e.nativeEvent.layout;
     if(width !== this.state.width || height !== this.state.height) {
-      this.setState({width, height});
+      this.setState({width, height}, () => {
+        this.updateSvgTransform();
+      });
     }
     this.measureLayout();
 
@@ -170,7 +310,12 @@ export default class ViewTransformer extends React.Component {
 
     let dx = gestureState.moveX - gestureState.previousMoveX;
     let dy = gestureState.moveY - gestureState.previousMoveY;
-    if (this.props.enableResistance) {
+
+    if (this.props.enableLimits) {
+      let d = this.applyLimits(dx, dy);
+      dx = d.dx;
+      dy = d.dy;
+    } else if (this.props.enableResistance) {
       let d = this.applyResistance(dx, dy);
       dx = d.dx;
       dy = d.dy;
@@ -185,7 +330,6 @@ export default class ViewTransformer extends React.Component {
       let scaleBy = gestureState.pinch / gestureState.previousPinch;
       let pivotX = gestureState.moveX - this.state.pageX;
       let pivotY = gestureState.moveY - this.state.pageY;
-
 
       let rect = transformedRect(transformedRect(this.contentRect(), this.currentTransform()), new Transform(
         scaleBy, dx, dy,
@@ -219,7 +363,6 @@ export default class ViewTransformer extends React.Component {
       return;
     }
 
-
     if (gestureState.doubleTapUp) {
       if (!this.props.enableScale) {
         this.animateBounce();
@@ -243,11 +386,6 @@ export default class ViewTransformer extends React.Component {
       }
     }
   }
-
-
-
-
-
 
   performFling(vx, vy) {
     let startX = 0;
@@ -319,6 +457,71 @@ export default class ViewTransformer extends React.Component {
     this.animate(rect);
   }
 
+  //applyLimits function from:
+  //https://github.com/maraujop/react-native-view-transformer.git
+  applyLimits(dx, dy) {
+    let availablePanDistance = availableTranslateSpace(
+      this.transformedContentRect(),
+      this.viewPortRect()
+    );
+
+    // Calculate until where can the view be moved
+    // This depends if the view is bigger / smaller than the viewport
+    if (this.transformedContentRect().width() < this.viewPortRect().width()) {
+      if (
+        dx < 0 &&
+        this.transformedContentRect().left + dx < this.viewPortRect().left
+      ) {
+          dx = availablePanDistance.left;
+      } else if (
+        dx > 0 &&
+        this.transformedContentRect().right + dx > this.viewPortRect().right
+      ) {
+          dx = -availablePanDistance.right;
+      }
+    } else {
+      if (
+        dx < 0 &&
+        this.transformedContentRect().right + dx < this.viewPortRect().right
+      ) {
+          dx = -availablePanDistance.right;
+      } else if (
+        dx > 0 &&
+        this.transformedContentRect().left + dx > this.viewPortRect().left
+      ) {
+          dx = availablePanDistance.left;
+      }
+    }
+
+    if (this.transformedContentRect().height() < this.viewPortRect().height()) {
+      if (
+        dy > 0 &&
+        this.transformedContentRect().bottom + dy > this.viewPortRect().bottom
+      ) {
+          dy = -availablePanDistance.bottom;
+      } else if (
+        dy < 0 &&
+        this.transformedContentRect().top + dy < this.viewPortRect().top
+      ) {
+          dy = availablePanDistance.top;
+      }
+    } else {
+      if (
+        dy > 0 &&
+        this.transformedContentRect().top + dy > this.viewPortRect().top
+      ) {
+          dy = availablePanDistance.top;
+      } else if (
+        dy < 0 &&
+        this.transformedContentRect().bottom + dy < this.viewPortRect().bottom
+      ) {
+          dy = -availablePanDistance.bottom;
+      }
+    }
+
+    return { dx, dy }
+  }
+
   applyResistance(dx, dy) {
     let availablePanDistance = availableTranslateSpace(this.transformedContentRect(), this.viewPortRect());
 
@@ -376,7 +579,7 @@ export default class ViewTransformer extends React.Component {
 
   animateBounce() {
     let curScale = this.state.scale;
-    let minScale = 1;
+    let minScale = this.props.minScale;
     let maxScale = this.props.maxScale;
     let scaleBy = 1;
     if (curScale > maxScale) {
@@ -404,12 +607,28 @@ export default class ViewTransformer extends React.Component {
 
 
   updateTransform(transform) {
-    this.setState(transform);
+    this.setState(transform, () => {
+      this.updateSvgTransform()
+    });
   }
 
+  //Piggyback the shape and position of contentRect so that
+  //the svgRect fits exactly above in a synchronized way
+  updateSvgTransform = () => {
+    if(!this._svgRect) return;
 
+    let newSvgTransform = getTransform(this.svgRect(), this.contentRect());
+    this.setState({
+      svgScale: newSvgTransform.scale,
+      svgTranslateX: newSvgTransform.translateX,
+      svgTranslateY: newSvgTransform.translateY
+    })
+  }
+
+  //I see no meaning with this function, but will keep it for compatibility
+  //with original documentation
   forceUpdateTransform(transform) {
-    this.setState(transform);
+    this.updateTransform(transform);
   }
 
   getAvailableTranslateSpace() {
@@ -450,13 +669,18 @@ ViewTransformer.propTypes = {
 
   onTransformGestureReleased: React.PropTypes.func,
 
-  onSingleTapConfirmed: React.PropTypes.func
+  svgWidth: React.PropTypes.number,
+  svgHeight: React.PropTypes.number,
+  enableLimits: React.PropTypes.bool,
+  renderFeatures: React.PropTypes.func,
+  renderOverlay: React.PropTypes.func
 };
 ViewTransformer.defaultProps = {
-  maxOverScrollDistance: 20,
+  maxOverScrollDistance: 0,
   enableScale: true,
   enableTranslate: true,
   enableTransform: true,
   maxScale: 1,
-  enableResistance: false
+  enableResistance: false,
+  enableLimits: false
 };
