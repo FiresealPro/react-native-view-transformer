@@ -151,6 +151,10 @@ export default class ViewTransformer extends React.Component {
       onResponderGrant: this.onResponderGrant.bind(this),
       onResponderRelease: this.onResponderRelease.bind(this),
       onResponderTerminate: this.onResponderRelease.bind(this),
+      onResponderTerminationRequest: (evt, gestureState) => false, //Do not allow parent view to intercept gesture
+      onResponderSingleTapConfirmed: (evt, gestureState) => {
+        this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed();
+      }
       onResponderTerminationRequest: (evt, gestureState) => false //Do not allow parent view to intercept gesture
     });
   }
@@ -579,7 +583,7 @@ export default class ViewTransformer extends React.Component {
 
   animateBounce() {
     let curScale = this.state.scale;
-    let minScale = this.props.minScale;
+    let minScale = 1;
     let maxScale = this.props.maxScale;
     let scaleBy = 1;
     if (curScale > maxScale) {
@@ -647,6 +651,7 @@ ViewTransformer.propTypes = {
    */
   enableScale: React.PropTypes.bool,
 
+
   /**
    * Use false to disable translateX/translateY. Default is true.
    */
@@ -668,6 +673,7 @@ ViewTransformer.propTypes = {
   onViewTransformed: React.PropTypes.func,
 
   onTransformGestureReleased: React.PropTypes.func,
+  onSingleTapConfirmed: React.PropTypes.func,
 
   svgWidth: React.PropTypes.number,
   svgHeight: React.PropTypes.number,
