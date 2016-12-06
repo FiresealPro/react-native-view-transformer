@@ -26,6 +26,7 @@ import React from 'react';
 import ReactNative, {
   View,
   Animated,
+  ActivityIndicator,
   Easing,
   NativeModules
 } from 'react-native';
@@ -42,22 +43,25 @@ export default class ViewTransformer extends React.Component {
     super(props);
     this.state = {
       //transform state
-      scale: 1,
-      translateX: 0,
+      scale: 10,
+      translateX: 30,
       translateY: 0,
 
       //animation state
       animator: new Animated.Value(0),
 
-      svgScale: 1,
+      svgScale: 1,  //1 = fit image on screen
       svgTranslateX: 0,
       svgTranslateY: 0,
+      svgDrawingScale: 0, //1 = full resolution
 
       //layout
       width: 0,
       height: 0,
       pageX: 0,
       pageY: 0,
+
+      isAnimating: false
     };
 
     this._viewPortRect = new Rect(); //A holder to avoid new too much
@@ -196,8 +200,14 @@ export default class ViewTransformer extends React.Component {
           {this.renderFeatures()}
         </View>
         {this.renderOverlay()}
+        {this.renderActivityIndicator()}
       </View>
     );
+  }
+
+  renderActivityIndicator = () => {
+    if(!this.props.renderActivityIndicator) return null
+    return this.props.renderActivityIndicator()
   }
 
   renderFeatures = () => {
@@ -222,7 +232,8 @@ export default class ViewTransformer extends React.Component {
           viewPortRect: this.viewPortRect(),
           pointToScreen: this.pointToScreen,
           screenToPoint: this.screenToPoint,
-          coordToSvgPoint: this.coordToSvgPoint
+          coordToSvgPoint: this.coordToSvgPoint,
+          onFinishedPainting: this.onFinishedPainting
         })}
       </View>
     );
@@ -237,7 +248,10 @@ export default class ViewTransformer extends React.Component {
           clipRect: this.clipRect(),
           viewPortRect: this.viewPortRect(),
           pointToScreen: this.pointToScreen,
-          screenToPoint: this.screenToPoint
+          screenToPoint: this.screenToPoint,
+          isAnimating: this.state.isAnimating,
+          isZooming: this.state.isZooming,
+          scale: this.state.svgDrawingScale
         })}
       </View>
     );
@@ -329,8 +343,14 @@ export default class ViewTransformer extends React.Component {
       dx = dy = 0;
     }
 
+
     let transform = {};
     if (gestureState.previousPinch && gestureState.pinch && this.props.enableScale) {
+
+let dx = gestureState.moveX - gestureState.previousMoveX;
+let dy = gestureState.moveY - gestureState.previousMoveY;
+
+
       let scaleBy = gestureState.pinch / gestureState.previousPinch;
       let pivotX = gestureState.moveX - this.state.pageX;
       let pivotY = gestureState.moveY - this.state.pageY;
@@ -435,11 +455,13 @@ export default class ViewTransformer extends React.Component {
       vx = 0;
     }
 
+    // this.setState({isAnimating: true})
     this.scroller.fling(startX, startY, vx, vy, minX, maxX, minY, maxY);
   }
 
   performDoubleTapUp(pivotX, pivotY) {
     console.log('performDoubleTapUp...pivot=' + pivotX + ', ' + pivotY);
+    this.setState({isAnimating: true})
     let curScale = this.state.scale;
     let scaleBy;
     if (curScale > (1 + this.props.maxScale) / 2) {
@@ -574,11 +596,15 @@ export default class ViewTransformer extends React.Component {
       this.updateTransform(transform);
     });
 
+    // this.setState({isAnimating: true})
+
     Animated.timing(this.state.animator, {
       toValue: 1,
       duration: duration,
       easing: Easing.inOut(Easing.ease)
-    }).start();
+    }).start((endState => {
+      this.setState({isAnimating: false})
+    }));
   }
 
   animateBounce() {
@@ -622,10 +648,12 @@ export default class ViewTransformer extends React.Component {
     if(!this._svgRect) return;
 
     let newSvgTransform = getTransform(this.svgRect(), this.contentRect());
+
     this.setState({
       svgScale: newSvgTransform.scale,
       svgTranslateX: newSvgTransform.translateX,
-      svgTranslateY: newSvgTransform.translateY
+      svgTranslateY: newSvgTransform.translateY,
+      svgDrawingScale: this.transformedContentRect().width() / this.props.svgWidth
     })
   }
 
