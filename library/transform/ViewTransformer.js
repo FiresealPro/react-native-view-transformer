@@ -284,9 +284,10 @@ export default class ViewTransformer extends React.Component {
   screenToPoint = (screenPoint) => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
+
     return {
-      x: screenPoint.x / ( co.width() * this.state.scale + tr.left ),
-      y: screenPoint.y / ( co.height() * this.state.scale + tr.top )
+      x: (screenPoint.x - tr.left ) / tr.width(),
+      y: (screenPoint.y - tr.top) / tr.height()
     }
   }
 
@@ -378,10 +379,13 @@ let dy = gestureState.moveY - gestureState.previousMoveY;
   }
 
   onResponderRelease(evt, gestureState) {
+    let coord = this.screenToPoint({x:gestureState.x0, y: gestureState.y0})
     let handled = this.props.onTransformGestureReleased && this.props.onTransformGestureReleased({
         scale: this.state.scale,
         translateX: this.state.translateX,
-        translateY: this.state.translateY
+        translateY: this.state.translateY,
+        coord: coord,
+        svgDrawingScale: this.state.svgDrawingScale
       });
     if (handled) {
       return;
