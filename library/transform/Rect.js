@@ -32,6 +32,13 @@ export default class Rect {
     return (this.top + this.bottom) / 2;
   }
 
+  center() {
+    return {
+      x: this.centerX(),
+      y: this.centerY()
+    }
+  }
+
   offset(dx, dy) {
     this.left += dx;
     this.right += dx;
@@ -43,7 +50,6 @@ export default class Rect {
   copy() {
     return new Rect(this.left, this.top, this.right, this.bottom);
   }
-
 
   equals(rect:Rect) {
     return this.left === rect.left && this.top === rect.top && this.right === rect.right && this.bottom && rect.bottom;

@@ -20,6 +20,18 @@ to match the original view.
 
 N.B this module is subject to refactoring and development. Do not trust on it's
 stability.
+
+Terminology:
+- Screen: the visible paint area, i.e. the physical pixels on the device are the limits
+- Image: Underlaying image. Often much bigger than the Screen
+- Overlay: SVG elements painted on top of the image at the native image resolution
+- Coordinate: A point on the image expressed as a decimal percentage, 0.5;0.5 is in the middle of the image
+- ScreenPoint: A point on the screen expressed in pixels from top-left of the screen
+- SvgPoint: a point on the svg overlay expressed in pixels from top-left of svg
+- ClipRect: the currently shown rect of the image expressed as coordinates (0;0, 1;1) = complete image
+- DrawingScalar: a scalar expressed as a percentage of the long side of the drawing
+  i.e. DrawingScalar=0.1, svgWidth=2000 -> ScreenScalar = 200
+- ScreenScalar: a scalar expressed in svcreen pixels
 */
 
 import React from 'react';
@@ -116,19 +128,19 @@ export default class ViewTransformer extends React.Component {
     return rect;
   }
 
-  //clipRect is the painted area relative to the image, i.e.
+  //clipRectCoordinates is the painted area relative to the image, i.e.
   //left >= 0, right <= 1
   //top => 0, bottom <= 1
-  clipRect = () => {
-    let content = this.contentRect();
-    let transform = this.currentTransform();
-    let transformed = this.transformedContentRect();
-    let viewPort = this.viewPortRect();
+  clipRectCoordinates = () => {
+    let content = this.contentRect()
+    let transform = this.currentTransform()
+    let transformed = this.transformedContentRect()
+    let viewPort = this.viewPortRect()
 
-    let centerX = 0.5 - transform.translateX / content.width();
-    let centerY = 0.5 - transform.translateY / content.height();
-    let width = Math.min(viewPort.width() / transformed.width(), 1);
-    let height = Math.min(viewPort.height() / transformed.height(), 1);
+    let centerX = 0.5 - transform.translateX / content.width()
+    let centerY = 0.5 - transform.translateY / content.height()
+    let width = viewPort.width() / transformed.width()
+    let height = viewPort.height() / transformed.height()
 
     return new Rect(
       Math.max(0, centerX - width/2),   //left
@@ -136,6 +148,42 @@ export default class ViewTransformer extends React.Component {
       Math.min(1, centerX + width/2),   //right
       Math.min(1, centerY + height/2)   //bottom
     );
+  }
+  //
+  // screenPointToDrawingPoint = (screenPoint) => {
+  //   let tr = this.transformedContentRect();
+  //   return {
+  //     x: (screenPoint.x - tr.left) / this.state.svgDrawingScale,
+  //     y: (screenPoint.y - tr.top) / this.state.svgDrawingScale
+  //   }
+  // }
+
+  clipRect = () => {
+    let clipRectCoordinates = this.clipRectCoordinates()
+    // let content = this.contentRect();
+    // let transform = this.currentTransform();
+    // let transformed = this.transformedContentRect();
+    // let viewPort = this.viewPortRect();
+    //
+    // let centerX = 0.5 - transform.translateX / content.width();
+    // let centerY = 0.5 - transform.translateY / content.height();
+    //
+    // let width = viewPort.width() / transformed.width()
+    // let height = viewPort.height() / transformed.height()
+
+    // return new Rect(
+    //   Math.max(0, centerX - width/2) * this.props.svgWidth,   //left
+    //   Math.max(0, centerY - height/2) * this.props.svgHeight,  //top
+    //   Math.min(1, centerX + width/2) * this.props.svgWidth,   //right
+    //   Math.min(1, centerY + height/2) * this.props.svgHeight   //bottom
+    // );
+    return new Rect(
+      clipRectCoordinates.left * this.props.svgWidth,   //left
+      clipRectCoordinates.top * this.props.svgHeight,  //top
+      clipRectCoordinates.right * this.props.svgWidth,   //right
+      clipRectCoordinates.bottom * this.props.svgHeight   //bottom
+    );
+
   }
 
   currentTransform() {
@@ -197,21 +245,20 @@ export default class ViewTransformer extends React.Component {
                 ]
           }}>
           {this.props.children}
-          {this.renderFeatures()}
+          {this.renderOverlay()}
         </View>
-        {this.renderOverlay()}
-        {this.renderActivityIndicator()}
+        {this.renderScreen()}
+        {this.props.renderActivityIndicator() && this.props.renderActivityIndicator()}
       </View>
     );
   }
 
-  renderActivityIndicator = () => {
-    if(!this.props.renderActivityIndicator) return null
-    return this.props.renderActivityIndicator()
-  }
-
-  renderFeatures = () => {
-    if(!this._svgRect || !this.props.renderFeatures) return null;
+  //"Overlay" is rendered over the complete undelaying image, even the
+  //parts not shown on screen right now. This should be rendered only
+  //once when it needs to update. Interactive changes only takes place on
+  //screen and should be handled by renderScreen()
+  renderOverlay = () => {
+    if(!this._svgRect || !this.props.renderOverlay) return null;
 
     return (
       <View
@@ -227,31 +274,45 @@ export default class ViewTransformer extends React.Component {
             {translateY: this.state.svgTranslateY}
           ]
         }}>
-        {this.props.renderFeatures && this.props.renderFeatures({
+        {this.props.renderOverlay && this.props.renderOverlay({
           clipRect: this.clipRect(),
-          viewPortRect: this.viewPortRect(),
-          pointToScreen: this.pointToScreen,
-          screenToPoint: this.screenToPoint,
-          coordToSvgPoint: this.coordToSvgPoint,
-          onFinishedPainting: this.onFinishedPainting
+          viewPortRect: this.viewPortRect()
+        }, {
+          coordinateToScreenPoint: this.coordinateToScreenPoint,
+          screenPointToCoordinate: this.screenPointToCoordinate,
+          coordinateToSvgPoint: this.coordinateToSvgPoint,
+          onFinishedPainting: this.onFinishedPainting,
+          drawingPointToScreenPoint: this.drawingPointToScreenPoint
         })}
       </View>
     );
   }
 
-  renderOverlay = () => {
-    if(!this.props.renderOverlay) return null;
+  //RenderScreen should only paint "on screen", i.e. screen coordinates
+  //and screen touches should drive this rendering
+  renderScreen = () => {
+    if(!this.props.renderScreen) return null;
 
     return (
       <View style={{position: 'absolute', left: 0, top: 0, width: this.state.width, height: this.state.height}}>
-        {this.props.renderOverlay && this.props.renderOverlay({
+        {this.props.renderScreen && this.props.renderScreen({
           clipRect: this.clipRect(),
           viewPortRect: this.viewPortRect(),
-          pointToScreen: this.pointToScreen,
-          screenToPoint: this.screenToPoint,
+          contentRect: this.contentRect(),
+          transformedContentRect: this.transformedContentRect(),
           isAnimating: this.state.isAnimating,
           isZooming: this.state.isZooming,
-          scale: this.state.svgDrawingScale
+          scale: this.state.scale,
+          svgDrawingScale: this.state.svgDrawingScale,
+          translateX: this.state.translateX,
+          translateY: this.state.translateY,
+
+        }, {
+          coordinateToScreenPoint: this.coordinateToScreenPoint,
+          screenPointToCoordinate: this.screenPointToCoordinate,
+          screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
+          drawingScalarToScreenScalar: this.drawingScalarToScreenScalar,
+          drawingPointToScreenPoint: this.drawingPointToScreenPoint
         })}
       </View>
     );
@@ -259,7 +320,7 @@ export default class ViewTransformer extends React.Component {
 
   //Convert a relative coordinate (ex: {x: 0.55, y: 0.85})
   //to a point on the svg overlay
-  coordToSvgPoint = (coord) => {
+  coordinateToSvgPoint = (coord) => {
     if(!this._svgRect) return coord
 
     return {
@@ -268,9 +329,9 @@ export default class ViewTransformer extends React.Component {
     }
   }
 
-  //Convert a point on underlaying image/view to local screen coordinates
-  //Use this for placing stationary controls on screen in renderOverlay()
-  pointToScreen = (drawingPoint) => {
+  //Convert a coordinate on underlaying image to a local screen point
+  //Use this for placing stationary controls on screen in renderScreen()
+  coordinateToScreenPoint = (drawingPoint) => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
     return {
@@ -279,9 +340,41 @@ export default class ViewTransformer extends React.Component {
     }
   }
 
+  //Convert a coordinate on underlaying image to a local screen point
+  //Use this for placing stationary controls on screen in renderScreen()
+  drawingPointToScreenPoint = (drawingPoint) => {
+    let tr = this.transformedContentRect();
+    return {
+      x: tr.left + drawingPoint.x * this.state.svgDrawingScale,
+      y: tr.top + drawingPoint.y * this.state.svgDrawingScale
+    }
+  }
+
+  //Convert a coordinate on underlaying image to a local screen point
+  //Use this for placing stationary controls on screen in renderScreen()
+  screenPointToDrawingPoint = (screenPoint) => {
+    let tr = this.transformedContentRect();
+    return {
+      x: (screenPoint.x - tr.left) / this.state.svgDrawingScale,
+      y: (screenPoint.y - tr.top) / this.state.svgDrawingScale
+    }
+  }
+
+  drawingScalarToScreenScalar = (drawingScalar) => {
+    let tr = this.transformedContentRect();
+    let co = this.contentRect();
+    return drawingScalar * Math.max(tr.width(), tr.height())
+  }
+
+  screenScalarToDrawingScalar = (screenScalar) => {
+    let tr = this.transformedContentRect();
+    let co = this.contentRect();
+    return screenScalar / this.state.svgDrawingScale
+  }
+
   //Convert a point on the visible screen (i.e. from touch event)
-  //to a point on the underlaying image
-  screenToPoint = (screenPoint) => {
+  //to a coordinate on the underlaying image
+  screenPointToCoordinate = (screenPoint) => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
 
@@ -326,6 +419,11 @@ export default class ViewTransformer extends React.Component {
 
   onResponderMove(evt, gestureState) {
     this.cancelAnimation();
+
+    let handled = this.props.onTransformGestureMove && this.props.onTransformGestureMove()
+    if(handled) {
+      return
+    }
 
     let dx = gestureState.moveX - gestureState.previousMoveX;
     let dy = gestureState.moveY - gestureState.previousMoveY;
@@ -379,14 +477,22 @@ let dy = gestureState.moveY - gestureState.previousMoveY;
   }
 
   onResponderRelease(evt, gestureState) {
-    let coord = this.screenToPoint({x:gestureState.x0, y: gestureState.y0})
-    let handled = this.props.onTransformGestureReleased && this.props.onTransformGestureReleased({
+    let drawingPoint = this.screenPointToDrawingPoint({x: gestureState.x0, y: gestureState.y0})
+    let handled = this.props.onTransformGestureReleased && this.props.onTransformGestureReleased(
+      {
         scale: this.state.scale,
         translateX: this.state.translateX,
         translateY: this.state.translateY,
-        coord: coord,
-        svgDrawingScale: this.state.svgDrawingScale
-      });
+        svgDrawingScale: this.state.svgDrawingScale,
+        drawingPoint: drawingPoint,
+        gestureState: gestureState
+      },
+      {
+        screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
+        drawingPointToScreenPoint: this.drawingPointToScreenPoint
+      }
+    );
+
     if (handled) {
       return;
     }
@@ -710,8 +816,8 @@ ViewTransformer.propTypes = {
   svgWidth: React.PropTypes.number,
   svgHeight: React.PropTypes.number,
   enableLimits: React.PropTypes.bool,
-  renderFeatures: React.PropTypes.func,
-  renderOverlay: React.PropTypes.func
+  renderOverlay: React.PropTypes.func,
+  renderScreen: React.PropTypes.func
 };
 ViewTransformer.defaultProps = {
   maxOverScrollDistance: 0,
