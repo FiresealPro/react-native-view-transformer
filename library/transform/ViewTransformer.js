@@ -248,7 +248,7 @@ export default class ViewTransformer extends React.Component {
           {this.renderOverlay()}
         </View>
         {this.renderScreen()}
-        {this.props.renderActivityIndicator() && this.props.renderActivityIndicator()}
+        {this.props.renderActivityIndicator && this.props.renderActivityIndicator()}
       </View>
     );
   }
@@ -420,11 +420,6 @@ export default class ViewTransformer extends React.Component {
   onResponderMove(evt, gestureState) {
     this.cancelAnimation();
 
-    let handled = this.props.onTransformGestureMove && this.props.onTransformGestureMove()
-    if(handled) {
-      return
-    }
-
     let dx = gestureState.moveX - gestureState.previousMoveX;
     let dy = gestureState.moveY - gestureState.previousMoveY;
 
@@ -438,16 +433,25 @@ export default class ViewTransformer extends React.Component {
       dy = d.dy;
     }
 
+    let handled = this.props.onTransformGestureMove && this.props.onTransformGestureMove({
+        gestureState: Object.assign({}, gestureState),
+        nativeEvent: evt.nativeEvent//.touches ? evt.nativeEvent.touches.slice() : null,
+      },
+      null //functions
+    )
+    if(handled) {
+      return
+    }
+
     if(!this.props.enableTranslate) {
       dx = dy = 0;
     }
 
-
     let transform = {};
     if (gestureState.previousPinch && gestureState.pinch && this.props.enableScale) {
 
-let dx = gestureState.moveX - gestureState.previousMoveX;
-let dy = gestureState.moveY - gestureState.previousMoveY;
+// let dx = gestureState.moveX - gestureState.previousMoveX;
+// let dy = gestureState.moveY - gestureState.previousMoveY;
 
 
       let scaleBy = gestureState.pinch / gestureState.previousPinch;
