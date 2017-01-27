@@ -51,12 +51,59 @@ export default class ViewTransformer extends React.Component {
   static Rect = Rect;
   static getTransform = getTransform;
 
+  static propTypes = {
+    // Use false to disable transform. Default is true.
+    enableTransform: React.PropTypes.bool,
+
+    // Use false to disable scaling. Default is true.
+    enableScale: React.PropTypes.bool,
+
+    //Use false to disable translateX/translateY. Default is true.
+    enableTranslate: React.PropTypes.bool,
+
+    maxOverScrollDistance: React.PropTypes.number,
+    maxScale: React.PropTypes.number,
+    initialScale: React.PropTypes.number,
+    contentAspectRatio: React.PropTypes.number,
+
+    //Use true to enable resistance effect on over pulling. Default is false.
+    enableResistance: React.PropTypes.bool,
+
+    onViewTransformed: React.PropTypes.func,
+
+    onTransformGestureReleased: React.PropTypes.func,
+    onSingleTapConfirmed: React.PropTypes.func,
+
+    svgWidth: React.PropTypes.number,
+    svgHeight: React.PropTypes.number,
+    enableLimits: React.PropTypes.bool,
+    renderOverlay: React.PropTypes.func,
+    renderScreen: React.PropTypes.func
+  }
+
+  static defaultProps = {
+    maxOverScrollDistance: 0,
+    enableScale: true,
+    enableTranslate: true,
+    enableTransform: true,
+    maxScale: 1,
+    initialScale: 10,
+    enableResistance: false,
+    enableLimits: false
+  }
+
+
   constructor(props) {
+    let initialTranslate = {
+      x: 300,
+      y: 0
+    }
+
     super(props);
     this.state = {
       //transform state
-      scale: 10,
-      translateX: 30,
+      scale: props.initialScale,
+      translateX: 375/2/5,
       translateY: 0,
 
       //animation state
@@ -98,6 +145,12 @@ export default class ViewTransformer extends React.Component {
         translateY: this.state.translateY + dy / this.state.scale
       })
     });
+  }
+
+  componentWillReceiveProps(nextProps) {
+    if (this.props.initialScale != nextProps.initialScale) {
+      this.updateTransform({ scale: nextProps.initialScale })
+    }
   }
 
   viewPortRect() {
@@ -157,6 +210,10 @@ export default class ViewTransformer extends React.Component {
   //     y: (screenPoint.y - tr.top) / this.state.svgDrawingScale
   //   }
   // }
+
+  screenCenterCoordinate = () => {
+    return this.clipRectCoordinates().center()
+  }
 
   clipRect = () => {
     let clipRectCoordinates = this.clipRectCoordinates()
@@ -280,7 +337,7 @@ export default class ViewTransformer extends React.Component {
         }, {
           coordinateToScreenPoint: this.coordinateToScreenPoint,
           screenPointToCoordinate: this.screenPointToCoordinate,
-          coordinateToSvgPoint: this.coordinateToSvgPoint,
+          coordinateToDrawingPoint: this.coordinateToDrawingPoint,
           onFinishedPainting: this.onFinishedPainting,
           drawingPointToScreenPoint: this.drawingPointToScreenPoint
         })}
@@ -309,18 +366,37 @@ export default class ViewTransformer extends React.Component {
 
         }, {
           coordinateToScreenPoint: this.coordinateToScreenPoint,
+          coordinateToDrawingPoint: this.coordinateToDrawingPoint,
+
           screenPointToCoordinate: this.screenPointToCoordinate,
+          // drawingPointToScreenPoint: this.drawingPointToScreenPoint,
+
           screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
           drawingScalarToScreenScalar: this.drawingScalarToScreenScalar,
-          drawingPointToScreenPoint: this.drawingPointToScreenPoint
         })}
       </View>
     );
   }
 
-  //Convert a relative coordinate (ex: {x: 0.55, y: 0.85})
-  //to a point on the svg overlay
-  coordinateToSvgPoint = (coord) => {
+  //Convert a coordinate on underlaying image to a local screen point
+  //ex: {x: 0.5, y: 0.4} => {x: 200, y: 150}
+  coordinateToScreenPoint = (coordinate) => {
+    return this.drawingPointToScreenPoint(
+      this.coordinateToDrawingPoint(coordinate)
+    )
+  }
+
+  //Convert a local screen point to a relative drawing coordinate
+  //ex: {x: 200, y: 150} => {x: 0.5, y: 0.4}
+  screenPointToCoordinate = (screenPoint) => {
+    return this.drawingPointToCoordinate(
+      this.screenPointToDrawingPoint(screenPoint)
+    )
+  }
+
+  //Convert a relative coordinate /to a point on the drawing (i.e. the overlay)
+  //ex: {x: 0.5, y: 0.4} => {x: 1000, y: 500}
+  coordinateToDrawingPoint = (coord) => {
     if(!this._svgRect) return coord
 
     return {
@@ -329,18 +405,18 @@ export default class ViewTransformer extends React.Component {
     }
   }
 
-  //Convert a coordinate on underlaying image to a local screen point
-  //Use this for placing stationary controls on screen in renderScreen()
-  coordinateToScreenPoint = (drawingPoint) => {
-    let tr = this.transformedContentRect();
-    let co = this.contentRect();
+  //Convert an absolute drawing point to a realative coordinate
+  //ex: {x: 1000, y: 500} => {x: 0.5, y: 0.4}
+  drawingPointToCoordinate = (drawingPoint) => {
+    if(!this._svgRect) return drawingPoint
+
     return {
-      x: drawingPoint.x * tr.width() + tr.left,
-      y: drawingPoint.y * tr.height() + tr.top
+      x: drawingPoint.x / this.props.svgWidth,
+      y: drawingPoint.y / this.props.svgHeight
     }
   }
 
-  //Convert a coordinate on underlaying image to a local screen point
+  //Convert a point on underlaying drawing to a local screen point
   //Use this for placing stationary controls on screen in renderScreen()
   drawingPointToScreenPoint = (drawingPoint) => {
     let tr = this.transformedContentRect();
@@ -350,8 +426,8 @@ export default class ViewTransformer extends React.Component {
     }
   }
 
-  //Convert a coordinate on underlaying image to a local screen point
-  //Use this for placing stationary controls on screen in renderScreen()
+  //Convert a screenpoint to a drawingpoint
+  //Use this for locating drawing point based on screen touches
   screenPointToDrawingPoint = (screenPoint) => {
     let tr = this.transformedContentRect();
     return {
@@ -437,7 +513,10 @@ export default class ViewTransformer extends React.Component {
         gestureState: Object.assign({}, gestureState),
         nativeEvent: evt.nativeEvent//.touches ? evt.nativeEvent.touches.slice() : null,
       },
-      null //functions
+      {
+        screenPointToCoordinate: this.screenPointToCoordinate,
+        coordinateToScreenPoint: this.coordinateToScreenPoint
+      }
     )
     if(handled) {
       return
@@ -481,18 +560,22 @@ export default class ViewTransformer extends React.Component {
   }
 
   onResponderRelease(evt, gestureState) {
-    let drawingPoint = this.screenPointToDrawingPoint({x: gestureState.x0, y: gestureState.y0})
+    // let drawingPoint = this.screenPointToDrawingPoint({x: gestureState.x0, y: gestureState.y0})
     let handled = this.props.onTransformGestureReleased && this.props.onTransformGestureReleased(
       {
         scale: this.state.scale,
         translateX: this.state.translateX,
         translateY: this.state.translateY,
         svgDrawingScale: this.state.svgDrawingScale,
-        drawingPoint: drawingPoint,
+        // drawingPoint: drawingPoint,
+        screenPoint: {x: gestureState.x0, y: gestureState.y0},
         gestureState: gestureState
       },
       {
         screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
+        screenPointToDrawingPoint: this.screenPointToDrawingPoint,
+        screenPointToCoordinate: this.screenPointToCoordinate,
+        coordinateToDrawingPoint: this.coordinateToDrawingPoint,
         drawingPointToScreenPoint: this.drawingPointToScreenPoint
       }
     );
@@ -596,6 +679,56 @@ export default class ViewTransformer extends React.Component {
 
     this.animate(rect);
   }
+
+  centerAtPoint({x, y, scale, animationDuration}) {
+    animationDuration = animationDuration || 0
+    this.setState({isAnimating: true})
+    let curScale = this.state.scale;
+    let scaleBy = scale / curScale;
+
+// console.log ({x,y})
+//     let visibleWidth = 50
+//     let left = x - visibleWidth / 2
+//     let top = y - visibleWidth / 2
+//     let right = x + visibleWidth / 2
+//     let bottom = y + visibleWidth / 2
+//
+//     let targetRect = new Rect(left, top, right, bottom)
+//
+// console.log({x,y})
+// console.log({translateX: this.state.translateX, translateY: this.state.translateY})
+//
+//   let translate = {
+//     x: x - this.state.translateX,
+//     y: y- this.state.translateY
+//   }
+// console.log(translate)
+//
+let screenPoint = this.coordinateToScreenPoint({x: x, y: y})
+
+// console.log({t: t})
+let screenCenter = this.viewPortRect().center()
+console.log(screenCenter)
+
+    x = screenPoint.x - this.viewPortRect().left
+    y = screenPoint.y - this.viewPortRect().top
+
+    let targetRect = transformedRect(this.transformedContentRect(), new Transform(
+      scaleBy, 0, 0,
+      {
+        x: y,
+        y: x
+      }
+    ));
+    targetRect = transformedRect(targetRect, new Transform(1, this.viewPortRect().centerX() - x, this.viewPortRect().centerY() - y));
+    // targetRect = alignedRect(targetRect, this.viewPortRect());
+    console.log(targetRect)
+//
+// console.log(rect.center())
+
+    this.animate(targetRect, animationDuration);
+  }
+
 
   //applyLimits function from:
   //https://github.com/maraujop/react-native-view-transformer.git
@@ -769,6 +902,7 @@ export default class ViewTransformer extends React.Component {
       svgTranslateY: newSvgTransform.translateY,
       svgDrawingScale: this.transformedContentRect().width() / this.props.svgWidth
     })
+
   }
 
   //I see no meaning with this function, but will keep it for compatibility
@@ -781,54 +915,3 @@ export default class ViewTransformer extends React.Component {
     return availableTranslateSpace(this.transformedContentRect(), this.viewPortRect());
   }
 }
-
-ViewTransformer.propTypes = {
-  /**
-   * Use false to disable transform. Default is true.
-   */
-  enableTransform: React.PropTypes.bool,
-
-  /**
-   * Use false to disable scaling. Default is true.
-   */
-  enableScale: React.PropTypes.bool,
-
-
-  /**
-   * Use false to disable translateX/translateY. Default is true.
-   */
-  enableTranslate: React.PropTypes.bool,
-
-  /**
-   * Default is 20
-   */
-  maxOverScrollDistance: React.PropTypes.number,
-
-  maxScale: React.PropTypes.number,
-  contentAspectRatio: React.PropTypes.number,
-
-  /**
-   * Use true to enable resistance effect on over pulling. Default is false.
-   */
-  enableResistance: React.PropTypes.bool,
-
-  onViewTransformed: React.PropTypes.func,
-
-  onTransformGestureReleased: React.PropTypes.func,
-  onSingleTapConfirmed: React.PropTypes.func,
-
-  svgWidth: React.PropTypes.number,
-  svgHeight: React.PropTypes.number,
-  enableLimits: React.PropTypes.bool,
-  renderOverlay: React.PropTypes.func,
-  renderScreen: React.PropTypes.func
-};
-ViewTransformer.defaultProps = {
-  maxOverScrollDistance: 0,
-  enableScale: true,
-  enableTranslate: true,
-  enableTransform: true,
-  maxScale: 1,
-  enableResistance: false,
-  enableLimits: false
-};
