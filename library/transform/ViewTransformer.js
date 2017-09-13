@@ -43,7 +43,7 @@ import ReactNative, {
   NativeModules,
 } from 'react-native';
 
-import PropeTypes from 'prop-types';
+import PropTypes from 'prop-types';
 
 import { createResponder } from 'react-native-gesture-responder';
 import Scroller from 'react-native-scroller';
