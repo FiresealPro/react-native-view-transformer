@@ -40,12 +40,22 @@ import ReactNative, {
   Animated,
   ActivityIndicator,
   Easing,
-  NativeModules
+  NativeModules,
 } from 'react-native';
 
-import {createResponder} from 'react-native-gesture-responder';
+import PropeTypes from 'prop-types';
+
+import { createResponder } from 'react-native-gesture-responder';
 import Scroller from 'react-native-scroller';
-import {Rect, Transform, transformedRect, availableTranslateSpace, fitCenterRect, alignedRect, getTransform} from './TransformUtils';
+import {
+  Rect,
+  Transform,
+  transformedRect,
+  availableTranslateSpace,
+  fitCenterRect,
+  alignedRect,
+  getTransform,
+} from './TransformUtils';
 
 export default class ViewTransformer extends React.Component {
   static Rect = Rect;
@@ -53,33 +63,33 @@ export default class ViewTransformer extends React.Component {
 
   static propTypes = {
     // Use false to disable transform. Default is true.
-    enableTransform: React.PropTypes.bool,
+    enableTransform: PropTypes.bool,
 
     // Use false to disable scaling. Default is true.
-    enableScale: React.PropTypes.bool,
+    enableScale: PropTypes.bool,
 
     //Use false to disable translateX/translateY. Default is true.
-    enableTranslate: React.PropTypes.bool,
+    enableTranslate: PropTypes.bool,
 
-    maxOverScrollDistance: React.PropTypes.number,
-    maxScale: React.PropTypes.number,
-    initialScale: React.PropTypes.number,
-    contentAspectRatio: React.PropTypes.number,
+    maxOverScrollDistance: PropTypes.number,
+    maxScale: PropTypes.number,
+    initialScale: PropTypes.number,
+    contentAspectRatio: PropTypes.number,
 
     //Use true to enable resistance effect on over pulling. Default is false.
-    enableResistance: React.PropTypes.bool,
+    enableResistance: PropTypes.bool,
 
-    onViewTransformed: React.PropTypes.func,
+    onViewTransformed: PropTypes.func,
 
-    onTransformGestureReleased: React.PropTypes.func,
-    onSingleTapConfirmed: React.PropTypes.func,
+    onTransformGestureReleased: PropTypes.func,
+    onSingleTapConfirmed: PropTypes.func,
 
-    svgWidth: React.PropTypes.number,
-    svgHeight: React.PropTypes.number,
-    enableLimits: React.PropTypes.bool,
-    renderOverlay: React.PropTypes.func,
-    renderScreen: React.PropTypes.func
-  }
+    svgWidth: PropTypes.number,
+    svgHeight: PropTypes.number,
+    enableLimits: PropTypes.bool,
+    renderOverlay: PropTypes.func,
+    renderScreen: PropTypes.func,
+  };
 
   static defaultProps = {
     maxOverScrollDistance: 0,
@@ -89,27 +99,26 @@ export default class ViewTransformer extends React.Component {
     maxScale: 1,
     initialScale: 10,
     enableResistance: false,
-    enableLimits: false
-  }
-
+    enableLimits: false,
+  };
 
   constructor(props) {
     let initialTranslate = {
       x: 300,
-      y: 0
-    }
+      y: 0,
+    };
 
     super(props);
     this.state = {
       //transform state
       scale: props.initialScale,
-      translateX: 375/2/5,
+      translateX: 375 / 2 / 5,
       translateY: 0,
 
       //animation state
       animator: new Animated.Value(0),
 
-      svgScale: 1,  //1 = fit image on screen
+      svgScale: 1, //1 = fit image on screen
       svgTranslateX: 0,
       svgTranslateY: 0,
       svgDrawingScale: 0, //1 = full resolution
@@ -120,21 +129,19 @@ export default class ViewTransformer extends React.Component {
       pageX: 0,
       pageY: 0,
 
-      isAnimating: false
+      isAnimating: false,
     };
 
     this._viewPortRect = new Rect(); //A holder to avoid new too much
 
-    this._svgRect = (this.props.svgWidth && this.props.svgHeight)
-      ? new Rect()
-      : null  //null means "no valid svg props"
+    this._svgRect = this.props.svgWidth && this.props.svgHeight ? new Rect() : null; //null means "no valid svg props"
 
     this.cancelAnimation = this.cancelAnimation.bind(this);
     this.contentRect = this.contentRect.bind(this);
     this.transformedContentRect = this.transformedContentRect.bind(this);
     this.animate = this.animate.bind(this);
 
-    this.scroller = new Scroller(true, (dx, dy, scroller) =>{
+    this.scroller = new Scroller(true, (dx, dy, scroller) => {
       if (dx === 0 && dy === 0 && scroller.isFinished()) {
         this.animateBounce();
         return;
@@ -142,14 +149,14 @@ export default class ViewTransformer extends React.Component {
 
       this.updateTransform({
         translateX: this.state.translateX + dx / this.state.scale,
-        translateY: this.state.translateY + dy / this.state.scale
-      })
+        translateY: this.state.translateY + dy / this.state.scale,
+      });
     });
   }
 
   componentWillReceiveProps(nextProps) {
     if (this.props.initialScale != nextProps.initialScale) {
-      this.updateTransform({ scale: nextProps.initialScale })
+      this.updateTransform({ scale: nextProps.initialScale });
     }
   }
 
@@ -159,7 +166,7 @@ export default class ViewTransformer extends React.Component {
   }
 
   svgRect() {
-    if(!this._svgRect) return null;
+    if (!this._svgRect) return null;
 
     this._svgRect.set(0, 0, this.props.svgWidth, this.props.svgHeight);
     return this._svgRect;
@@ -185,23 +192,23 @@ export default class ViewTransformer extends React.Component {
   //left >= 0, right <= 1
   //top => 0, bottom <= 1
   clipRectCoordinates = () => {
-    let content = this.contentRect()
-    let transform = this.currentTransform()
-    let transformed = this.transformedContentRect()
-    let viewPort = this.viewPortRect()
+    let content = this.contentRect();
+    let transform = this.currentTransform();
+    let transformed = this.transformedContentRect();
+    let viewPort = this.viewPortRect();
 
-    let centerX = 0.5 - transform.translateX / content.width()
-    let centerY = 0.5 - transform.translateY / content.height()
-    let width = viewPort.width() / transformed.width()
-    let height = viewPort.height() / transformed.height()
+    let centerX = 0.5 - transform.translateX / content.width();
+    let centerY = 0.5 - transform.translateY / content.height();
+    let width = viewPort.width() / transformed.width();
+    let height = viewPort.height() / transformed.height();
 
     return new Rect(
-      Math.max(0, centerX - width/2),   //left
-      Math.max(0, centerY - height/2),  //top
-      Math.min(1, centerX + width/2),   //right
-      Math.min(1, centerY + height/2)   //bottom
+      Math.max(0, centerX - width / 2), //left
+      Math.max(0, centerY - height / 2), //top
+      Math.min(1, centerX + width / 2), //right
+      Math.min(1, centerY + height / 2) //bottom
     );
-  }
+  };
   //
   // screenPointToDrawingPoint = (screenPoint) => {
   //   let tr = this.transformedContentRect();
@@ -212,11 +219,11 @@ export default class ViewTransformer extends React.Component {
   // }
 
   screenCenterCoordinate = () => {
-    return this.clipRectCoordinates().center()
-  }
+    return this.clipRectCoordinates().center();
+  };
 
   clipRect = () => {
-    let clipRectCoordinates = this.clipRectCoordinates()
+    let clipRectCoordinates = this.clipRectCoordinates();
     // let content = this.contentRect();
     // let transform = this.currentTransform();
     // let transformed = this.transformedContentRect();
@@ -235,13 +242,12 @@ export default class ViewTransformer extends React.Component {
     //   Math.min(1, centerY + height/2) * this.props.svgHeight   //bottom
     // );
     return new Rect(
-      clipRectCoordinates.left * this.props.svgWidth,   //left
-      clipRectCoordinates.top * this.props.svgHeight,  //top
-      clipRectCoordinates.right * this.props.svgWidth,   //right
-      clipRectCoordinates.bottom * this.props.svgHeight   //bottom
+      clipRectCoordinates.left * this.props.svgWidth, //left
+      clipRectCoordinates.top * this.props.svgHeight, //top
+      clipRectCoordinates.right * this.props.svgWidth, //right
+      clipRectCoordinates.bottom * this.props.svgHeight //bottom
     );
-
-  }
+  };
 
   currentTransform() {
     return new Transform(this.state.scale, this.state.translateX, this.state.translateY);
@@ -264,16 +270,17 @@ export default class ViewTransformer extends React.Component {
       onResponderSingleTapConfirmed: (evt, gestureState) => {
         this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed();
       },
-      onResponderTerminationRequest: (evt, gestureState) => false //Do not allow parent view to intercept gesture
+      onResponderTerminationRequest: (evt, gestureState) => false, //Do not allow parent view to intercept gesture
     });
   }
 
   componentDidUpdate(prevProps, prevState) {
-    this.props.onViewTransformed && this.props.onViewTransformed({
-      scale: this.state.scale,
-      translateX: this.state.translateX,
-      translateY: this.state.translateY
-    });
+    this.props.onViewTransformed &&
+      this.props.onViewTransformed({
+        scale: this.state.scale,
+        translateX: this.state.translateX,
+        translateY: this.state.translateY,
+      });
   }
 
   componentWillUnmount() {
@@ -291,16 +298,18 @@ export default class ViewTransformer extends React.Component {
         {...this.props}
         {...gestureResponder}
         ref={'innerViewRef'}
-        onLayout={this.onLayout.bind(this)}>
+        onLayout={this.onLayout.bind(this)}
+      >
         <View
           style={{
             flex: 1,
             transform: [
-                  {scale: this.state.scale},
-                  {translateX: this.state.translateX},
-                  {translateY: this.state.translateY}
-                ]
-          }}>
+              { scale: this.state.scale },
+              { translateX: this.state.translateX },
+              { translateY: this.state.translateY },
+            ],
+          }}
+        >
           {this.props.children}
           {this.renderOverlay()}
         </View>
@@ -315,7 +324,7 @@ export default class ViewTransformer extends React.Component {
   //once when it needs to update. Interactive changes only takes place on
   //screen and should be handled by renderScreen()
   renderOverlay = () => {
-    if(!this._svgRect || !this.props.renderOverlay) return null;
+    if (!this._svgRect || !this.props.renderOverlay) return null;
 
     return (
       <View
@@ -326,144 +335,156 @@ export default class ViewTransformer extends React.Component {
           width: this.props.svgWidth,
           height: this.props.svgHeight,
           transform: [
-            {scale: this.state.svgScale},
-            {translateX: this.state.svgTranslateX},
-            {translateY: this.state.svgTranslateY}
-          ]
-        }}>
-        {this.props.renderOverlay && this.props.renderOverlay({
-          clipRect: this.clipRect(),
-          viewPortRect: this.viewPortRect()
-        }, {
-          coordinateToScreenPoint: this.coordinateToScreenPoint,
-          screenPointToCoordinate: this.screenPointToCoordinate,
-          coordinateToDrawingPoint: this.coordinateToDrawingPoint,
-          onFinishedPainting: this.onFinishedPainting,
-          drawingPointToScreenPoint: this.drawingPointToScreenPoint
-        })}
+            { scale: this.state.svgScale },
+            { translateX: this.state.svgTranslateX },
+            { translateY: this.state.svgTranslateY },
+          ],
+        }}
+      >
+        {this.props.renderOverlay &&
+          this.props.renderOverlay(
+            {
+              clipRect: this.clipRect(),
+              viewPortRect: this.viewPortRect(),
+            },
+            {
+              coordinateToScreenPoint: this.coordinateToScreenPoint,
+              screenPointToCoordinate: this.screenPointToCoordinate,
+              coordinateToDrawingPoint: this.coordinateToDrawingPoint,
+              onFinishedPainting: this.onFinishedPainting,
+              drawingPointToScreenPoint: this.drawingPointToScreenPoint,
+            }
+          )}
       </View>
     );
-  }
+  };
 
   //RenderScreen should only paint "on screen", i.e. screen coordinates
   //and screen touches should drive this rendering
   renderScreen = () => {
-    if(!this.props.renderScreen) return null;
+    if (!this.props.renderScreen) return null;
 
     return (
-      <View style={{position: 'absolute', left: 0, top: 0, width: this.state.width, height: this.state.height}}>
-        {this.props.renderScreen && this.props.renderScreen({
-          clipRect: this.clipRect(),
-          viewPortRect: this.viewPortRect(),
-          contentRect: this.contentRect(),
-          transformedContentRect: this.transformedContentRect(),
-          isAnimating: this.state.isAnimating,
-          isZooming: this.state.isZooming,
-          scale: this.state.scale,
-          svgDrawingScale: this.state.svgDrawingScale,
-          translateX: this.state.translateX,
-          translateY: this.state.translateY,
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: this.state.width,
+          height: this.state.height,
+        }}
+      >
+        {this.props.renderScreen &&
+          this.props.renderScreen(
+            {
+              clipRect: this.clipRect(),
+              viewPortRect: this.viewPortRect(),
+              contentRect: this.contentRect(),
+              transformedContentRect: this.transformedContentRect(),
+              isAnimating: this.state.isAnimating,
+              isZooming: this.state.isZooming,
+              scale: this.state.scale,
+              svgDrawingScale: this.state.svgDrawingScale,
+              translateX: this.state.translateX,
+              translateY: this.state.translateY,
+            },
+            {
+              coordinateToScreenPoint: this.coordinateToScreenPoint,
+              coordinateToDrawingPoint: this.coordinateToDrawingPoint,
 
-        }, {
-          coordinateToScreenPoint: this.coordinateToScreenPoint,
-          coordinateToDrawingPoint: this.coordinateToDrawingPoint,
+              screenPointToCoordinate: this.screenPointToCoordinate,
+              // drawingPointToScreenPoint: this.drawingPointToScreenPoint,
 
-          screenPointToCoordinate: this.screenPointToCoordinate,
-          // drawingPointToScreenPoint: this.drawingPointToScreenPoint,
-
-          screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
-          drawingScalarToScreenScalar: this.drawingScalarToScreenScalar,
-        })}
+              screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
+              drawingScalarToScreenScalar: this.drawingScalarToScreenScalar,
+            }
+          )}
       </View>
     );
-  }
+  };
 
   //Convert a coordinate on underlaying image to a local screen point
   //ex: {x: 0.5, y: 0.4} => {x: 200, y: 150}
-  coordinateToScreenPoint = (coordinate) => {
-    return this.drawingPointToScreenPoint(
-      this.coordinateToDrawingPoint(coordinate)
-    )
-  }
+  coordinateToScreenPoint = coordinate => {
+    return this.drawingPointToScreenPoint(this.coordinateToDrawingPoint(coordinate));
+  };
 
   //Convert a local screen point to a relative drawing coordinate
   //ex: {x: 200, y: 150} => {x: 0.5, y: 0.4}
-  screenPointToCoordinate = (screenPoint) => {
-    return this.drawingPointToCoordinate(
-      this.screenPointToDrawingPoint(screenPoint)
-    )
-  }
+  screenPointToCoordinate = screenPoint => {
+    return this.drawingPointToCoordinate(this.screenPointToDrawingPoint(screenPoint));
+  };
 
   //Convert a relative coordinate /to a point on the drawing (i.e. the overlay)
   //ex: {x: 0.5, y: 0.4} => {x: 1000, y: 500}
-  coordinateToDrawingPoint = (coord) => {
-    if(!this._svgRect) return coord
+  coordinateToDrawingPoint = coord => {
+    if (!this._svgRect) return coord;
 
     return {
       x: coord.x * this.props.svgWidth,
-      y: coord.y * this.props.svgHeight
-    }
-  }
+      y: coord.y * this.props.svgHeight,
+    };
+  };
 
   //Convert an absolute drawing point to a realative coordinate
   //ex: {x: 1000, y: 500} => {x: 0.5, y: 0.4}
-  drawingPointToCoordinate = (drawingPoint) => {
-    if(!this._svgRect) return drawingPoint
+  drawingPointToCoordinate = drawingPoint => {
+    if (!this._svgRect) return drawingPoint;
 
     return {
       x: drawingPoint.x / this.props.svgWidth,
-      y: drawingPoint.y / this.props.svgHeight
-    }
-  }
+      y: drawingPoint.y / this.props.svgHeight,
+    };
+  };
 
   //Convert a point on underlaying drawing to a local screen point
   //Use this for placing stationary controls on screen in renderScreen()
-  drawingPointToScreenPoint = (drawingPoint) => {
+  drawingPointToScreenPoint = drawingPoint => {
     let tr = this.transformedContentRect();
     return {
       x: tr.left + drawingPoint.x * this.state.svgDrawingScale,
-      y: tr.top + drawingPoint.y * this.state.svgDrawingScale
-    }
-  }
+      y: tr.top + drawingPoint.y * this.state.svgDrawingScale,
+    };
+  };
 
   //Convert a screenpoint to a drawingpoint
   //Use this for locating drawing point based on screen touches
-  screenPointToDrawingPoint = (screenPoint) => {
+  screenPointToDrawingPoint = screenPoint => {
     let tr = this.transformedContentRect();
     return {
       x: (screenPoint.x - tr.left) / this.state.svgDrawingScale,
-      y: (screenPoint.y - tr.top) / this.state.svgDrawingScale
-    }
-  }
+      y: (screenPoint.y - tr.top) / this.state.svgDrawingScale,
+    };
+  };
 
-  drawingScalarToScreenScalar = (drawingScalar) => {
+  drawingScalarToScreenScalar = drawingScalar => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
-    return drawingScalar * Math.max(tr.width(), tr.height())
-  }
+    return drawingScalar * Math.max(tr.width(), tr.height());
+  };
 
-  screenScalarToDrawingScalar = (screenScalar) => {
+  screenScalarToDrawingScalar = screenScalar => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
-    return screenScalar / this.state.svgDrawingScale
-  }
+    return screenScalar / this.state.svgDrawingScale;
+  };
 
   //Convert a point on the visible screen (i.e. from touch event)
   //to a coordinate on the underlaying image
-  screenPointToCoordinate = (screenPoint) => {
+  screenPointToCoordinate = screenPoint => {
     let tr = this.transformedContentRect();
     let co = this.contentRect();
 
     return {
-      x: (screenPoint.x - tr.left ) / tr.width(),
-      y: (screenPoint.y - tr.top) / tr.height()
-    }
-  }
+      x: (screenPoint.x - tr.left) / tr.width(),
+      y: (screenPoint.y - tr.top) / tr.height(),
+    };
+  };
 
   onLayout(e) {
-    const {width, height} = e.nativeEvent.layout;
-    if(width !== this.state.width || height !== this.state.height) {
-      this.setState({width, height}, () => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== this.state.width || height !== this.state.height) {
+      this.setState({ width, height }, () => {
         this.updateSvgTransform();
       });
     }
@@ -474,22 +495,25 @@ export default class ViewTransformer extends React.Component {
 
   measureLayout() {
     let handle = ReactNative.findNodeHandle(this.refs['innerViewRef']);
-    NativeModules.UIManager.measure(handle, ((x, y, width, height, pageX, pageY) => {
-      if(typeof pageX === 'number' && typeof pageY === 'number') { //avoid undefined values on Android devices
-        if(this.state.pageX !== pageX || this.state.pageY !== pageY) {
-          this.setState({
-            pageX: pageX,
-            pageY: pageY
-          });
+    NativeModules.UIManager.measure(
+      handle,
+      ((x, y, width, height, pageX, pageY) => {
+        if (typeof pageX === 'number' && typeof pageY === 'number') {
+          //avoid undefined values on Android devices
+          if (this.state.pageX !== pageX || this.state.pageY !== pageY) {
+            this.setState({
+              pageX: pageX,
+              pageY: pageY,
+            });
+          }
         }
-      }
-
-    }).bind(this));
+      }).bind(this)
+    );
   }
 
   onResponderGrant(evt, gestureState) {
     this.props.onTransformStart && this.props.onTransformStart();
-    this.setState({responderGranted: true});
+    this.setState({ responderGranted: true });
     this.measureLayout();
   }
 
@@ -509,41 +533,42 @@ export default class ViewTransformer extends React.Component {
       dy = d.dy;
     }
 
-    let handled = this.props.onTransformGestureMove && this.props.onTransformGestureMove({
-        gestureState: Object.assign({}, gestureState),
-        nativeEvent: evt.nativeEvent//.touches ? evt.nativeEvent.touches.slice() : null,
-      },
-      {
-        screenPointToCoordinate: this.screenPointToCoordinate,
-        coordinateToScreenPoint: this.coordinateToScreenPoint
-      }
-    )
-    if(handled) {
-      return
+    let handled =
+      this.props.onTransformGestureMove &&
+      this.props.onTransformGestureMove(
+        {
+          gestureState: Object.assign({}, gestureState),
+          nativeEvent: evt.nativeEvent, //.touches ? evt.nativeEvent.touches.slice() : null,
+        },
+        {
+          screenPointToCoordinate: this.screenPointToCoordinate,
+          coordinateToScreenPoint: this.coordinateToScreenPoint,
+        }
+      );
+    if (handled) {
+      return;
     }
 
-    if(!this.props.enableTranslate) {
+    if (!this.props.enableTranslate) {
       dx = dy = 0;
     }
 
     let transform = {};
     if (gestureState.previousPinch && gestureState.pinch && this.props.enableScale) {
-
-// let dx = gestureState.moveX - gestureState.previousMoveX;
-// let dy = gestureState.moveY - gestureState.previousMoveY;
-
+      // let dx = gestureState.moveX - gestureState.previousMoveX;
+      // let dy = gestureState.moveY - gestureState.previousMoveY;
 
       let scaleBy = gestureState.pinch / gestureState.previousPinch;
       let pivotX = gestureState.moveX - this.state.pageX;
       let pivotY = gestureState.moveY - this.state.pageY;
 
-      let rect = transformedRect(transformedRect(this.contentRect(), this.currentTransform()), new Transform(
-        scaleBy, dx, dy,
-        {
+      let rect = transformedRect(
+        transformedRect(this.contentRect(), this.currentTransform()),
+        new Transform(scaleBy, dx, dy, {
           x: pivotX,
-          y: pivotY
-        }
-      ));
+          y: pivotY,
+        })
+      );
       transform = getTransform(this.contentRect(), rect);
     } else {
       if (Math.abs(dx) > 2 * Math.abs(dy)) {
@@ -561,24 +586,26 @@ export default class ViewTransformer extends React.Component {
 
   onResponderRelease(evt, gestureState) {
     // let drawingPoint = this.screenPointToDrawingPoint({x: gestureState.x0, y: gestureState.y0})
-    let handled = this.props.onTransformGestureReleased && this.props.onTransformGestureReleased(
-      {
-        scale: this.state.scale,
-        translateX: this.state.translateX,
-        translateY: this.state.translateY,
-        svgDrawingScale: this.state.svgDrawingScale,
-        // drawingPoint: drawingPoint,
-        screenPoint: {x: gestureState.x0, y: gestureState.y0},
-        gestureState: gestureState
-      },
-      {
-        screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
-        screenPointToDrawingPoint: this.screenPointToDrawingPoint,
-        screenPointToCoordinate: this.screenPointToCoordinate,
-        coordinateToDrawingPoint: this.coordinateToDrawingPoint,
-        drawingPointToScreenPoint: this.drawingPointToScreenPoint
-      }
-    );
+    let handled =
+      this.props.onTransformGestureReleased &&
+      this.props.onTransformGestureReleased(
+        {
+          scale: this.state.scale,
+          translateX: this.state.translateX,
+          translateY: this.state.translateY,
+          svgDrawingScale: this.state.svgDrawingScale,
+          // drawingPoint: drawingPoint,
+          screenPoint: { x: gestureState.x0, y: gestureState.y0 },
+          gestureState: gestureState,
+        },
+        {
+          screenScalarToDrawingScalar: this.screenScalarToDrawingScalar,
+          screenPointToDrawingPoint: this.screenPointToDrawingPoint,
+          screenPointToCoordinate: this.screenPointToCoordinate,
+          coordinateToDrawingPoint: this.coordinateToDrawingPoint,
+          drawingPointToScreenPoint: this.drawingPointToScreenPoint,
+        }
+      );
 
     if (handled) {
       return;
@@ -589,7 +616,8 @@ export default class ViewTransformer extends React.Component {
         this.animateBounce();
         return;
       }
-      let pivotX = 0, pivotY = 0;
+      let pivotX = 0,
+        pivotY = 0;
       if (gestureState.dx || gestureState.dy) {
         pivotX = gestureState.moveX - this.state.pageX;
         pivotY = gestureState.moveY - this.state.pageY;
@@ -600,7 +628,7 @@ export default class ViewTransformer extends React.Component {
 
       this.performDoubleTapUp(pivotX, pivotY);
     } else {
-      if(this.props.enableTranslate) {
+      if (this.props.enableTranslate) {
         this.performFling(gestureState.vx, gestureState.vy);
       } else {
         this.animateBounce();
@@ -612,7 +640,10 @@ export default class ViewTransformer extends React.Component {
     let startX = 0;
     let startY = 0;
     let maxX, minX, maxY, minY;
-    let availablePanDistance = availableTranslateSpace(this.transformedContentRect(), this.viewPortRect());
+    let availablePanDistance = availableTranslateSpace(
+      this.transformedContentRect(),
+      this.viewPortRect()
+    );
     if (vx > 0) {
       minX = 0;
       if (availablePanDistance.left > 0) {
@@ -658,7 +689,7 @@ export default class ViewTransformer extends React.Component {
 
   performDoubleTapUp(pivotX, pivotY) {
     console.log('performDoubleTapUp...pivot=' + pivotX + ', ' + pivotY);
-    this.setState({isAnimating: true})
+    this.setState({ isAnimating: true });
     let curScale = this.state.scale;
     let scaleBy;
     if (curScale > (1 + this.props.maxScale) / 2) {
@@ -667,68 +698,77 @@ export default class ViewTransformer extends React.Component {
       scaleBy = this.props.maxScale / curScale;
     }
 
-    let rect = transformedRect(this.transformedContentRect(), new Transform(
-      scaleBy, 0, 0,
-      {
+    let rect = transformedRect(
+      this.transformedContentRect(),
+      new Transform(scaleBy, 0, 0, {
         x: pivotX,
-        y: pivotY
-      }
-    ));
-    rect = transformedRect(rect, new Transform(1, this.viewPortRect().centerX() - pivotX, this.viewPortRect().centerY() - pivotY));
+        y: pivotY,
+      })
+    );
+    rect = transformedRect(
+      rect,
+      new Transform(
+        1,
+        this.viewPortRect().centerX() - pivotX,
+        this.viewPortRect().centerY() - pivotY
+      )
+    );
     rect = alignedRect(rect, this.viewPortRect());
 
     this.animate(rect);
   }
 
-  centerAtPoint({x, y, scale, animationDuration}) {
-    animationDuration = animationDuration || 0
-    this.setState({isAnimating: true})
+  centerAtPoint({ x, y, scale, animationDuration }) {
+    animationDuration = animationDuration || 0;
+    this.setState({ isAnimating: true });
     let curScale = this.state.scale;
     let scaleBy = scale / curScale;
 
-// console.log ({x,y})
-//     let visibleWidth = 50
-//     let left = x - visibleWidth / 2
-//     let top = y - visibleWidth / 2
-//     let right = x + visibleWidth / 2
-//     let bottom = y + visibleWidth / 2
-//
-//     let targetRect = new Rect(left, top, right, bottom)
-//
-// console.log({x,y})
-// console.log({translateX: this.state.translateX, translateY: this.state.translateY})
-//
-//   let translate = {
-//     x: x - this.state.translateX,
-//     y: y- this.state.translateY
-//   }
-// console.log(translate)
-//
-let screenPoint = this.coordinateToScreenPoint({x: x, y: y})
+    // console.log ({x,y})
+    //     let visibleWidth = 50
+    //     let left = x - visibleWidth / 2
+    //     let top = y - visibleWidth / 2
+    //     let right = x + visibleWidth / 2
+    //     let bottom = y + visibleWidth / 2
+    //
+    //     let targetRect = new Rect(left, top, right, bottom)
+    //
+    // console.log({x,y})
+    // console.log({translateX: this.state.translateX, translateY: this.state.translateY})
+    //
+    //   let translate = {
+    //     x: x - this.state.translateX,
+    //     y: y- this.state.translateY
+    //   }
+    // console.log(translate)
+    //
+    let screenPoint = this.coordinateToScreenPoint({ x: x, y: y });
 
-// console.log({t: t})
-let screenCenter = this.viewPortRect().center()
-console.log(screenCenter)
+    // console.log({t: t})
+    let screenCenter = this.viewPortRect().center();
+    console.log(screenCenter);
 
-    x = screenPoint.x - this.viewPortRect().left
-    y = screenPoint.y - this.viewPortRect().top
+    x = screenPoint.x - this.viewPortRect().left;
+    y = screenPoint.y - this.viewPortRect().top;
 
-    let targetRect = transformedRect(this.transformedContentRect(), new Transform(
-      scaleBy, 0, 0,
-      {
+    let targetRect = transformedRect(
+      this.transformedContentRect(),
+      new Transform(scaleBy, 0, 0, {
         x: y,
-        y: x
-      }
-    ));
-    targetRect = transformedRect(targetRect, new Transform(1, this.viewPortRect().centerX() - x, this.viewPortRect().centerY() - y));
+        y: x,
+      })
+    );
+    targetRect = transformedRect(
+      targetRect,
+      new Transform(1, this.viewPortRect().centerX() - x, this.viewPortRect().centerY() - y)
+    );
     // targetRect = alignedRect(targetRect, this.viewPortRect());
-    console.log(targetRect)
-//
-// console.log(rect.center())
+    console.log(targetRect);
+    //
+    // console.log(rect.center())
 
     this.animate(targetRect, animationDuration);
   }
-
 
   //applyLimits function from:
   //https://github.com/maraujop/react-native-view-transformer.git
@@ -741,76 +781,52 @@ console.log(screenCenter)
     // Calculate until where can the view be moved
     // This depends if the view is bigger / smaller than the viewport
     if (this.transformedContentRect().width() < this.viewPortRect().width()) {
-      if (
-        dx < 0 &&
-        this.transformedContentRect().left + dx < this.viewPortRect().left
-      ) {
-          dx = availablePanDistance.left;
-      } else if (
-        dx > 0 &&
-        this.transformedContentRect().right + dx > this.viewPortRect().right
-      ) {
-          dx = -availablePanDistance.right;
+      if (dx < 0 && this.transformedContentRect().left + dx < this.viewPortRect().left) {
+        dx = availablePanDistance.left;
+      } else if (dx > 0 && this.transformedContentRect().right + dx > this.viewPortRect().right) {
+        dx = -availablePanDistance.right;
       }
     } else {
-      if (
-        dx < 0 &&
-        this.transformedContentRect().right + dx < this.viewPortRect().right
-      ) {
-          dx = -availablePanDistance.right;
-      } else if (
-        dx > 0 &&
-        this.transformedContentRect().left + dx > this.viewPortRect().left
-      ) {
-          dx = availablePanDistance.left;
+      if (dx < 0 && this.transformedContentRect().right + dx < this.viewPortRect().right) {
+        dx = -availablePanDistance.right;
+      } else if (dx > 0 && this.transformedContentRect().left + dx > this.viewPortRect().left) {
+        dx = availablePanDistance.left;
       }
     }
 
     if (this.transformedContentRect().height() < this.viewPortRect().height()) {
-      if (
-        dy > 0 &&
-        this.transformedContentRect().bottom + dy > this.viewPortRect().bottom
-      ) {
-          dy = -availablePanDistance.bottom;
-      } else if (
-        dy < 0 &&
-        this.transformedContentRect().top + dy < this.viewPortRect().top
-      ) {
-          dy = availablePanDistance.top;
+      if (dy > 0 && this.transformedContentRect().bottom + dy > this.viewPortRect().bottom) {
+        dy = -availablePanDistance.bottom;
+      } else if (dy < 0 && this.transformedContentRect().top + dy < this.viewPortRect().top) {
+        dy = availablePanDistance.top;
       }
     } else {
-      if (
-        dy > 0 &&
-        this.transformedContentRect().top + dy > this.viewPortRect().top
-      ) {
-          dy = availablePanDistance.top;
-      } else if (
-        dy < 0 &&
-        this.transformedContentRect().bottom + dy < this.viewPortRect().bottom
-      ) {
-          dy = -availablePanDistance.bottom;
+      if (dy > 0 && this.transformedContentRect().top + dy > this.viewPortRect().top) {
+        dy = availablePanDistance.top;
+      } else if (dy < 0 && this.transformedContentRect().bottom + dy < this.viewPortRect().bottom) {
+        dy = -availablePanDistance.bottom;
       }
     }
 
-    return { dx, dy }
+    return { dx, dy };
   }
 
   applyResistance(dx, dy) {
-    let availablePanDistance = availableTranslateSpace(this.transformedContentRect(), this.viewPortRect());
+    let availablePanDistance = availableTranslateSpace(
+      this.transformedContentRect(),
+      this.viewPortRect()
+    );
 
-    if ((dx > 0 && availablePanDistance.left < 0)
-      ||
-      (dx < 0 && availablePanDistance.right < 0)) {
+    if ((dx > 0 && availablePanDistance.left < 0) || (dx < 0 && availablePanDistance.right < 0)) {
       dx /= 3;
     }
-    if ((dy > 0 && availablePanDistance.top < 0)
-      ||
-      (dy < 0 && availablePanDistance.bottom < 0)) {
+    if ((dy > 0 && availablePanDistance.top < 0) || (dy < 0 && availablePanDistance.bottom < 0)) {
       dy /= 3;
     }
     return {
-      dx, dy
-    }
+      dx,
+      dy,
+    };
   }
 
   cancelAnimation() {
@@ -831,7 +847,7 @@ console.log(screenCenter)
 
     this.state.animator.removeAllListeners();
     this.state.animator.setValue(0);
-    this.state.animator.addListener((state) =>{
+    this.state.animator.addListener(state => {
       let progress = state.value;
 
       let left = fromRect.left + (targetRect.left - fromRect.left) * progress;
@@ -848,10 +864,10 @@ console.log(screenCenter)
     Animated.timing(this.state.animator, {
       toValue: 1,
       duration: duration,
-      easing: Easing.inOut(Easing.ease)
-    }).start((endState => {
-      this.setState({isAnimating: false})
-    }));
+      easing: Easing.inOut(Easing.ease),
+    }).start(endState => {
+      this.setState({ isAnimating: false });
+    });
   }
 
   animateBounce() {
@@ -865,15 +881,13 @@ console.log(screenCenter)
       scaleBy = minScale / curScale;
     }
 
-    let rect = transformedRect(this.transformedContentRect(), new Transform(
-      scaleBy,
-      0,
-      0,
-      {
+    let rect = transformedRect(
+      this.transformedContentRect(),
+      new Transform(scaleBy, 0, 0, {
         x: this.viewPortRect().centerX(),
-        y: this.viewPortRect().centerY()
-      }
-    ));
+        y: this.viewPortRect().centerY(),
+      })
+    );
     rect = alignedRect(rect, this.viewPortRect());
     this.animate(rect);
   }
@@ -882,17 +896,16 @@ console.log(screenCenter)
   // ***********************************************************************************
   // Below are public functions. Feel free to use them.
 
-
   updateTransform(transform) {
     this.setState(transform, () => {
-      this.updateSvgTransform()
+      this.updateSvgTransform();
     });
   }
 
   //Piggyback the shape and position of contentRect so that
   //the svgRect fits exactly above in a synchronized way
   updateSvgTransform = () => {
-    if(!this._svgRect) return;
+    if (!this._svgRect) return;
 
     let newSvgTransform = getTransform(this.svgRect(), this.contentRect());
 
@@ -900,10 +913,9 @@ console.log(screenCenter)
       svgScale: newSvgTransform.scale,
       svgTranslateX: newSvgTransform.translateX,
       svgTranslateY: newSvgTransform.translateY,
-      svgDrawingScale: this.transformedContentRect().width() / this.props.svgWidth
-    })
-
-  }
+      svgDrawingScale: this.transformedContentRect().width() / this.props.svgWidth,
+    });
+  };
 
   //I see no meaning with this function, but will keep it for compatibility
   //with original documentation

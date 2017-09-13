@@ -51,6 +51,7 @@ export default class Rect {
     return new Rect(this.left, this.top, this.right, this.bottom);
   }
 
+
   equals(rect:Rect) {
     return this.left === rect.left && this.top === rect.top && this.right === rect.right && this.bottom && rect.bottom;
   }
