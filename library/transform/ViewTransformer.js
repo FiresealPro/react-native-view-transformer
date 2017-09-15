@@ -35,13 +35,7 @@ Terminology:
 */
 
 import React from 'react';
-import ReactNative, {
-  View,
-  Animated,
-  ActivityIndicator,
-  Easing,
-  NativeModules,
-} from 'react-native';
+import ReactNative, { View, Animated, ActivityIndicator, Easing } from 'react-native';
 
 import PropTypes from 'prop-types';
 
@@ -451,6 +445,12 @@ export default class ViewTransformer extends React.Component {
   //Use this for locating drawing point based on screen touches
   screenPointToDrawingPoint = screenPoint => {
     let tr = this.transformedContentRect();
+
+    //Compensate for top left corner offset, i.e. if the ViewTransformer is not at
+    //absolute screen pos 0,0 we need to subtract the offset
+    screenPoint.y = screenPoint.y - this.state.pageY;
+    screenPoint.x = screenPoint.x - this.state.pageX;
+
     return {
       x: (screenPoint.x - tr.left) / this.state.svgDrawingScale,
       y: (screenPoint.y - tr.top) / this.state.svgDrawingScale,
@@ -482,33 +482,43 @@ export default class ViewTransformer extends React.Component {
   };
 
   onLayout(e) {
-    const { width, height } = e.nativeEvent.layout;
-    if (width !== this.state.width || height !== this.state.height) {
-      this.setState({ width, height }, () => {
-        this.updateSvgTransform();
-      });
-    }
+    console.log(e.nativeEvent.layout);
     this.measureLayout();
-
     this.props.onLayout && this.props.onLayout(e);
   }
 
   measureLayout() {
-    let handle = ReactNative.findNodeHandle(this.refs['innerViewRef']);
-    NativeModules.UIManager.measure(
-      handle,
-      ((x, y, width, height, pageX, pageY) => {
-        if (typeof pageX === 'number' && typeof pageY === 'number') {
-          //avoid undefined values on Android devices
-          if (this.state.pageX !== pageX || this.state.pageY !== pageY) {
-            this.setState({
+    this.refs['innerViewRef'].measure((x, y, width, height, pageX, pageY) => {
+      console.log({ x, y, width, height, pageX, pageY });
+
+      if (
+        typeof pageX === 'number' &&
+        (typeof pageY === 'number') & (typeof width === 'number') &&
+        typeof height === 'number'
+      ) {
+        //avoid undefined values on Android devices
+        if (
+          this.state.pageX !== pageX ||
+          this.state.pageY !== pageY ||
+          this.state.width !== width ||
+          this.state.height !== height
+        ) {
+          this.setState(
+            {
               pageX: pageX,
               pageY: pageY,
-            });
-          }
+              width: width,
+              height: height,
+            },
+            () => {
+              this.setState({ width, height }, () => {
+                this.updateSvgTransform();
+              });
+            }
+          );
         }
-      }).bind(this)
-    );
+      }
+    });
   }
 
   onResponderGrant(evt, gestureState) {
