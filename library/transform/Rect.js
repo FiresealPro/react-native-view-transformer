@@ -1,7 +1,6 @@
 'use strict';
 
 export default class Rect {
-
   constructor(left, top, right, bottom) {
     this.left = left;
     this.top = top;
@@ -35,8 +34,8 @@ export default class Rect {
   center() {
     return {
       x: this.centerX(),
-      y: this.centerY()
-    }
+      y: this.centerY(),
+    };
   }
 
   offset(dx, dy) {
@@ -51,16 +50,23 @@ export default class Rect {
     return new Rect(this.left, this.top, this.right, this.bottom);
   }
 
-
-  equals(rect:Rect) {
-    return this.left === rect.left && this.top === rect.top && this.right === rect.right && this.bottom && rect.bottom;
+  equals(rect: Rect) {
+    return (
+      this.left === rect.left &&
+      this.top === rect.top &&
+      this.right === rect.right &&
+      this.bottom &&
+      rect.bottom
+    );
   }
 
   isValid() {
-    if (typeof this.left === 'number'
-      && typeof this.right === 'number'
-      && typeof this.top === 'number'
-      && typeof this.bottom === 'number') {
+    if (
+      typeof this.left === 'number' &&
+      typeof this.right === 'number' &&
+      typeof this.top === 'number' &&
+      typeof this.bottom === 'number'
+    ) {
       return true;
     }
     return false;
